@@ -20,7 +20,11 @@ from botorch.acquisition.multi_objective.monte_carlo import (
 from botorch.utils.sampling import sample_simplex
 from botorch.acquisition.monte_carlo import qNoisyExpectedImprovement
 import warnings
+import numpy as np 
 from botorch.exceptions import BadInitialCandidatesWarning
+import pickle 
+
+
 warnings.filterwarnings("ignore", message="Attempted to use direct, but fortran library could not be imported. Using PDOO optimiser instead of direct.")
 
 tkwargs = {
@@ -30,16 +34,13 @@ tkwargs = {
 
 NOISE_SE = torch.tensor([15.19, 0.63], **tkwargs) 
 
-
 N_TRIALS = 4 
-
-SMOKE_TEST = True
 
 problem = BraninCurrin(negate=True).to(**tkwargs)
 
-BATCH_SIZE = 2 
-NUM_RESTARTS = 10 if not SMOKE_TEST else 3
-RAW_SAMPLES = 512 if not SMOKE_TEST else 4
+BATCH_SIZE = 1 
+NUM_RESTARTS = 3
+RAW_SAMPLES = 4 
 
 standard_bounds = torch.zeros(2, problem.dim, **tkwargs)
 standard_bounds[1] = 1
@@ -47,11 +48,24 @@ standard_bounds[1] = 1
 warnings.filterwarnings("ignore", category=BadInitialCandidatesWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-N_BATCH = 20 if not SMOKE_TEST else 2
-MC_SAMPLES = 128 if not SMOKE_TEST else 16
+N_ITER = 20 
+MC_SAMPLES = 16 
 
 verbose = True
 
+def ci(y):
+    return 1.96 * y.std(axis=0) / np.sqrt(N_TRIALS) 
+
+def to_cpu(tensor):
+    return tensor.detach().cpu().numpy()
+
+def load_pickles(files, root='MOO/runs'):
+    outputs = []
+    for file in files:
+        with open(f'{root}/{file}', "rb") as f:
+            outputs.append(pickle.load(f))  
+    return tuple(outputs) 
+    
 def generate_initial_data(n=6):
     # generate training data
     train_x = draw_sobol_samples(bounds=problem.bounds, n=n, q=1).squeeze(1)

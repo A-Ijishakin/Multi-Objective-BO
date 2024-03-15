@@ -13,21 +13,23 @@ from dragonfly.exd.worker_manager import SyntheticWorkerManager
 from methods import (generate_initial_data, initialize_model, problem, 
                      optimize_qehvi_and_get_observation, optimize_qnehvi_and_get_observation, 
                       optimize_qnparego_and_get_observation, 
-                      MC_SAMPLES, BATCH_SIZE, NOISE_SE, N_BATCH, verbose, N_TRIALS) 
+                      MC_SAMPLES, BATCH_SIZE, NOISE_SE, N_ITER, verbose, N_TRIALS) 
+from tqdm import tqdm 
 import numpy as np 
-import json 
-
-
-torch.manual_seed(43)
-np.random.seed(43) 
+import pickle 
 
 hvs_all_qparego, hvs_all_qehvi, hvs_all_qnehvi, hvs_all_random, hvs_all_dragonfly = [], [], [], [], [] 
 train_obj_true_all_qparego, train_obj_true_all_qehvi, train_obj_true_all_qnehvi, train_obj_true_all_random, train_obj_true_all_dragonfly = [], [], [], [], [] 
 train_obj_all_qparego, train_obj_all_qehvi, train_obj_all_qnehvi, train_obj_all_random, train_obj_all_dragonfly = [], [], [], [], [] 
 train_x_all_qparego, train_x_all_qehvi, train_x_all_qnehvi, train_x_all_random, train_x_all_dragonfly = [], [], [], [], []
 
+seed_var = 41 
 
-for n in N_TRIALS:
+for n in tqdm(range(N_TRIALS)):
+    seed_var += 1 
+    torch.manual_seed(seed_var)
+    np.random.seed(seed_var) 
+    
     options = Namespace(
                 # build_new_model_every=BATCH_SIZE,  
                 total_budget = 100, 
@@ -67,7 +69,7 @@ for n in N_TRIALS:
     
     # call helper functions to generate initial training data
     train_x_qparego, train_obj_qparego, train_obj_true_qparego = generate_initial_data(
-        n=6
+        n=4
     )
     train_x_qehvi, train_obj_qehvi, train_obj_true_qehvi = (
         train_x_qparego,
@@ -98,7 +100,6 @@ for n in N_TRIALS:
     mll_qehvi, model_qehvi = initialize_model(train_x_qehvi, train_obj_qehvi)
     mll_qnehvi, model_qnehvi = initialize_model(train_x_qnehvi, train_obj_qnehvi)
 
-
     # compute hypervolume
     bd = DominatedPartitioning(ref_point=problem.ref_point, Y=train_obj_true_qparego)
     volume = bd.compute_hypervolume().item()
@@ -109,8 +110,8 @@ for n in N_TRIALS:
     hvs_random.append(volume)
     hvs_dragonfly.append(volume)
 
-    # run N_BATCH rounds of BayesOpt after the initial random batch
-    for iteration in range(1, N_BATCH + 1):
+    # run N_ITER rounds of BayesOpt after the initial random batch
+    for iteration in range(1, N_ITER + 1):
         t0 = time.monotonic()
 
         # fit the models
@@ -155,9 +156,9 @@ for n in N_TRIALS:
         dragonfly_opt.step_idx += 1
 
         # Retrieve the Pareto-optimal points
-        new_x_dragonfly = torch.tensor(dragonfly_opt.ask(n_points=BATCH_SIZE)).to('cuda')
+        new_x_dragonfly = torch.tensor(dragonfly_opt.ask()).to('cuda')
 
-        dragonfly_opt._build_new_model()
+        dragonfly_opt._build_new_model() 
         dragonfly_opt._set_next_gp()
 
         #compute
@@ -251,7 +252,8 @@ dragonfly = {'hvs': hvs_all_dragonfly, 'train_obj_true': train_obj_true_all_drag
 random = {'hvs': hvs_all_random, 'train_obj_true': train_obj_true_all_random, 'train_obj': train_obj_all_random,
           'train_x': train_x_all_random, 'method': 'random'} 
 
-for method in [qparego, qehvi, qnehvi, dragonfly, random]:
-    json.dump(method, open(f"results/{method}.json", "w")) 
+for (name, method) in zip(['qparego', 'qehvi', 'qnehvi', 'dragonfly', 'random'], [qparego, qehvi, qnehvi, dragonfly, random]):
+    with open(f"MOO/runs/{name}.pkl", "wb") as f:
+        pickle.dump(method, f) 
     
 breakpoint 
