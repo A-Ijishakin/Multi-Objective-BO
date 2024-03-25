@@ -1,6 +1,9 @@
 import torch
+import warnings 
+from botorch.test_functions.multi_objective import BraninCurrin
 import time
 from botorch import fit_gpytorch_mll
+from botorch.exceptions import BadInitialCandidatesWarning
 from botorch.utils.multi_objective.box_decompositions.dominated import (
     DominatedPartitioning,
 )
@@ -10,10 +13,9 @@ from argparse import Namespace
 from dragonfly.exd.experiment_caller import CPMultiFunctionCaller
 from dragonfly.opt.multiobjective_gp_bandit import CPMultiObjectiveGPBandit 
 from dragonfly.exd.worker_manager import SyntheticWorkerManager
-from methods import (generate_initial_data, initialize_model, problem, 
+from methods import (generate_initial_data, initialize_model, 
                      optimize_qehvi_and_get_observation, optimize_qnehvi_and_get_observation, 
-                      optimize_qnparego_and_get_observation, 
-                      MC_SAMPLES, BATCH_SIZE, NOISE_SE, N_ITER, verbose, N_TRIALS) 
+                      optimize_qnparego_and_get_observation) 
 from tqdm import tqdm 
 import numpy as np 
 import pickle 
@@ -24,6 +26,26 @@ train_obj_all_qparego, train_obj_all_qehvi, train_obj_all_qnehvi, train_obj_all_
 train_x_all_qparego, train_x_all_qehvi, train_x_all_qnehvi, train_x_all_random, train_x_all_dragonfly = [], [], [], [], []
 
 seed_var = 41 
+
+tkwargs = {
+    "dtype": torch.double,
+    "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+} 
+
+date = '21-03-2024'
+N_ITER = 20 
+MC_SAMPLES = 16 
+verbose = True
+NOISE_SE = torch.tensor([15.19, 0.63], **tkwargs) 
+N_TRIALS = 20 
+BATCH_SIZE = 1 
+problem = BraninCurrin(negate=True).to(**tkwargs) 
+NUM_RESTARTS = 3
+RAW_SAMPLES = 4 
+standard_bounds = torch.zeros(2, problem.dim, **tkwargs)
+standard_bounds[1] = 1
+warnings.filterwarnings("ignore", category=BadInitialCandidatesWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 for n in tqdm(range(N_TRIALS)):
     seed_var += 1 
@@ -68,9 +90,9 @@ for n in tqdm(range(N_TRIALS)):
     hvs_qparego, hvs_qehvi, hvs_qnehvi, hvs_random, hvs_dragonfly = [], [], [], [], []  
     
     # call helper functions to generate initial training data
-    train_x_qparego, train_obj_qparego, train_obj_true_qparego = generate_initial_data(
-        n=4
-    )
+    train_x_qparego, train_obj_qparego, train_obj_true_qparego = generate_initial_data(problem=problem, 
+                    NOISE_SE=NOISE_SE, n=4)
+
     train_x_qehvi, train_obj_qehvi, train_obj_true_qehvi = (
         train_x_qparego,
         train_obj_qparego,
@@ -96,9 +118,9 @@ for n in tqdm(range(N_TRIALS)):
     # new_x_dragonfly, new_obj_dragonfly = train_x_dragonfly, train_obj_dragonfly
 
     #initialize models for the different acquisition functions
-    mll_qparego, model_qparego = initialize_model(train_x_qparego, train_obj_qparego)
-    mll_qehvi, model_qehvi = initialize_model(train_x_qehvi, train_obj_qehvi)
-    mll_qnehvi, model_qnehvi = initialize_model(train_x_qnehvi, train_obj_qnehvi)
+    mll_qparego, model_qparego = initialize_model(train_x_qparego, train_obj_qparego, problem=problem, NOISE_SE=NOISE_SE)
+    mll_qehvi, model_qehvi = initialize_model(train_x_qehvi, train_obj_qehvi, problem=problem, NOISE_SE=NOISE_SE)
+    mll_qnehvi, model_qnehvi = initialize_model(train_x_qnehvi, train_obj_qnehvi, problem=problem, NOISE_SE=NOISE_SE)
 
     # compute hypervolume
     bd = DominatedPartitioning(ref_point=problem.ref_point, Y=train_obj_true_qparego)
@@ -130,21 +152,25 @@ for n in tqdm(range(N_TRIALS)):
             new_obj_qparego,
             new_obj_true_qparego,
         ) = optimize_qnparego_and_get_observation(
-            model_qparego, train_x_qparego, train_obj_qparego, qparego_sampler
+            model=model_qparego, train_x=train_x_qparego, sampler=qparego_sampler, 
+            problem=problem, standard_bounds=standard_bounds, BATCH_SIZE=BATCH_SIZE,
+            NUM_RESTARTS=NUM_RESTARTS, RAW_SAMPLES=RAW_SAMPLES, NOISE_SE=NOISE_SE, 
+            tkwargs=tkwargs 
         )
         new_x_qehvi, new_obj_qehvi, new_obj_true_qehvi = optimize_qehvi_and_get_observation(
-            model_qehvi, train_x_qehvi, train_obj_qehvi, qehvi_sampler
+            model=model_qehvi, train_x=train_x_qehvi, sampler=qehvi_sampler, problem=problem, standard_bounds=standard_bounds, 
+            BATCH_SIZE=BATCH_SIZE, NUM_RESTARTS=NUM_RESTARTS, RAW_SAMPLES=RAW_SAMPLES, NOISE_SE=NOISE_SE 
         )
         (
             new_x_qnehvi,
             new_obj_qnehvi,
             new_obj_true_qnehvi,
         ) = optimize_qnehvi_and_get_observation(
-            model_qnehvi, train_x_qnehvi, train_obj_qnehvi, qnehvi_sampler
-        )
-        new_x_random, new_obj_random, new_obj_true_random = generate_initial_data(
-            n=BATCH_SIZE
-        )
+            model=model_qnehvi, train_x=train_x_qnehvi, sampler=qnehvi_sampler, 
+             problem=problem, standard_bounds=standard_bounds, BATCH_SIZE=BATCH_SIZE, 
+                                        NUM_RESTARTS=NUM_RESTARTS, RAW_SAMPLES=RAW_SAMPLES, NOISE_SE=NOISE_SE) 
+        new_x_random, new_obj_random, new_obj_true_random = generate_initial_data(problem=problem, 
+                    NOISE_SE=NOISE_SE, n=BATCH_SIZE)
 
         for (x, y) in zip(train_x_dragonfly, train_obj_dragonfly):
             #dragonfly
@@ -156,7 +182,7 @@ for n in tqdm(range(N_TRIALS)):
         dragonfly_opt.step_idx += 1
 
         # Retrieve the Pareto-optimal points
-        new_x_dragonfly = torch.tensor(dragonfly_opt.ask()).to('cuda')
+        new_x_dragonfly = torch.tensor(dragonfly_opt.ask()).to('cuda') 
 
         dragonfly_opt._build_new_model() 
         dragonfly_opt._set_next_gp()
@@ -205,9 +231,9 @@ for n in tqdm(range(N_TRIALS)):
         # reinitialize the models so they are ready for fitting on next iteration
         # Note: we find improved performance from not warm starting the model hyperparameters
         # using the hyperparameters from the previous iteration
-        mll_qparego, model_qparego = initialize_model(train_x_qparego, train_obj_qparego)
-        mll_qehvi, model_qehvi = initialize_model(train_x_qehvi, train_obj_qehvi)
-        mll_qnehvi, model_qnehvi = initialize_model(train_x_qnehvi, train_obj_qnehvi)
+        mll_qparego, model_qparego = initialize_model(train_x_qparego, train_obj_qparego, problem=problem, NOISE_SE=NOISE_SE)
+        mll_qehvi, model_qehvi = initialize_model(train_x_qehvi, train_obj_qehvi, problem=problem, NOISE_SE=NOISE_SE)
+        mll_qnehvi, model_qnehvi = initialize_model(train_x_qnehvi, train_obj_qnehvi, problem=problem, NOISE_SE=NOISE_SE)
 
         # dragonfly_opt._build_new_model()
         # dragonfly_opt._set_next_gp()
@@ -253,7 +279,7 @@ random = {'hvs': hvs_all_random, 'train_obj_true': train_obj_true_all_random, 't
           'train_x': train_x_all_random, 'method': 'random'} 
 
 for (name, method) in zip(['qparego', 'qehvi', 'qnehvi', 'dragonfly', 'random'], [qparego, qehvi, qnehvi, dragonfly, random]):
-    with open(f"MOO/runs/{name}.pkl", "wb") as f:
+    with open(f"MOO/runs/{date}/{name}.pkl", "wb") as f:
         pickle.dump(method, f) 
     
 breakpoint 

@@ -1,5 +1,4 @@
 import torch 
-from botorch.test_functions.multi_objective import BraninCurrin
 from botorch.utils.sampling import draw_sobol_samples
 from botorch.models.gp_regression import FixedNoiseGP
 from botorch.models.model_list_gp_regression import ModelListGP
@@ -21,39 +20,12 @@ from botorch.utils.sampling import sample_simplex
 from botorch.acquisition.monte_carlo import qNoisyExpectedImprovement
 import warnings
 import numpy as np 
-from botorch.exceptions import BadInitialCandidatesWarning
 import pickle 
 
 
 warnings.filterwarnings("ignore", message="Attempted to use direct, but fortran library could not be imported. Using PDOO optimiser instead of direct.")
 
-tkwargs = {
-    "dtype": torch.double,
-    "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-} 
-
-NOISE_SE = torch.tensor([15.19, 0.63], **tkwargs) 
-
-N_TRIALS = 4 
-
-problem = BraninCurrin(negate=True).to(**tkwargs)
-
-BATCH_SIZE = 1 
-NUM_RESTARTS = 3
-RAW_SAMPLES = 4 
-
-standard_bounds = torch.zeros(2, problem.dim, **tkwargs)
-standard_bounds[1] = 1
-
-warnings.filterwarnings("ignore", category=BadInitialCandidatesWarning)
-warnings.filterwarnings("ignore", category=RuntimeWarning)
-
-N_ITER = 20 
-MC_SAMPLES = 16 
-
-verbose = True
-
-def ci(y):
+def ci(y, N_TRIALS):
     return 1.96 * y.std(axis=0) / np.sqrt(N_TRIALS) 
 
 def to_cpu(tensor):
@@ -66,7 +38,7 @@ def load_pickles(files, root='MOO/runs'):
             outputs.append(pickle.load(f))  
     return tuple(outputs) 
     
-def generate_initial_data(n=6):
+def generate_initial_data(problem, NOISE_SE, n=6):
     # generate training data
     train_x = draw_sobol_samples(bounds=problem.bounds, n=n, q=1).squeeze(1)
     train_obj_true = problem(train_x)
@@ -74,7 +46,7 @@ def generate_initial_data(n=6):
     return train_x, train_obj, train_obj_true
 
 
-def initialize_model(train_x, train_obj):
+def initialize_model(train_x, train_obj, problem, NOISE_SE):
     # define models for objective and constraint
     train_x = normalize(train_x, problem.bounds)
     models = []
@@ -91,7 +63,8 @@ def initialize_model(train_x, train_obj):
     return mll, model
 
 
-def optimize_qehvi_and_get_observation(model, train_x, train_obj, sampler):
+def optimize_qehvi_and_get_observation(model, train_x, sampler, problem, standard_bounds, BATCH_SIZE, 
+                                       NUM_RESTARTS, RAW_SAMPLES, NOISE_SE):
     """Optimizes the qEHVI acquisition function, and returns a new candidate and observation."""
     # partition non-dominated space into disjoint rectangles
     with torch.no_grad():
@@ -123,7 +96,8 @@ def optimize_qehvi_and_get_observation(model, train_x, train_obj, sampler):
     return new_x, new_obj, new_obj_true
 
 
-def optimize_qnehvi_and_get_observation(model, train_x, train_obj, sampler):
+def optimize_qnehvi_and_get_observation(model, train_x,  sampler, problem, standard_bounds, BATCH_SIZE, 
+                                        NUM_RESTARTS, RAW_SAMPLES, NOISE_SE):
     """Optimizes the qEHVI acquisition function, and returns a new candidate and observation."""
     # partition non-dominated space into disjoint rectangles
     acq_func = qNoisyExpectedHypervolumeImprovement(
@@ -150,7 +124,9 @@ def optimize_qnehvi_and_get_observation(model, train_x, train_obj, sampler):
     return new_x, new_obj, new_obj_true
 
 
-def optimize_qnparego_and_get_observation(model, train_x, train_obj, sampler):
+def optimize_qnparego_and_get_observation(model, train_x, sampler, 
+                                          problem, standard_bounds, BATCH_SIZE, 
+                                        NUM_RESTARTS, RAW_SAMPLES, NOISE_SE, tkwargs):
     """Samples a set of random weights for each candidate in the batch, performs sequential greedy optimization
     of the qNParEGO acquisition function, and returns a new candidate and observation."""
     train_x = normalize(train_x, problem.bounds)
