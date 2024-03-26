@@ -11,7 +11,7 @@ This is the repo that we will use for the multi-objective bayesian optimisation 
     ```
 2. Then run the command:
     ```
-    conda create --name <env> --file <this file>
+    conda create --name <env> --file requirements.txt
     ```
     where <env> is the environment name 
 
@@ -26,9 +26,10 @@ This is the repo that we will use for the multi-objective bayesian optimisation 
 There is some basic code for plotting the output of BO runs in plot.py. 
 The first plot illustrates the log difference in hypervolume between the complete hypervolume and the hypervolume encompassed by candidates suggested by various acquisition functions. This comparison is presented as a function of time. The second plot is the mean pareto front of these candidates. 
 
+<!-- 
 They should have the following form: 
 [![hv-difference](https://i.postimg.cc/8s1HPMQs/hv-difference.png)](https://postimg.cc/8s1HPMQs)
 
 
 [![Objectives](https://i.postimg.cc/56yS8JtV/Objectives.png)](https://postimg.cc/56yS8JtV)
-
+ -->
