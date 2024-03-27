@@ -29,7 +29,7 @@ parser.add_argument('--test_function', type=str, default='branincurrin',
                      help='Test function to optimize') 
 parser.add_argument('--input_constraint', type=bool, default=False, 
                      help='The constraint on the test function input (if any)')  
-parser.add_argument('--output_constraint', type=bool, default=False, 
+parser.add_argument('--output_constraint', default=None, 
                         help='The constraint on the test function (if any)') 
 parser.add_argument('--noise_se', type=list, default=None) 
 parser.add_argument('--w_dragonfly', type=bool, default=True) 
@@ -48,9 +48,9 @@ tkwargs = {
 } 
 
 ########
-args.test_function = 'c2dtlz2' 
+# args.test_function = 'branincurrin' 
 args.noise_se = [15.19, 0.63] 
-args.output_constraint = 'c2-constraint'
+# args.output_constraint = 'c2-constraint'
 args.w_dragonfly = True  
 ########
 
@@ -170,7 +170,7 @@ for n in tqdm(range(N_TRIALS)):
             train_obj_dragonfly = torch.cat([train_obj_dragonfly, train_con_dragonfly], dim=1) 
     
     else:
-        train_con_qparego, train_con_qehvi, train_con_qnehvi, train_con_random, train_con_dragonfly = None 
+        train_con_qparego, train_con_qehvi, train_con_qnehvi, train_con_random, train_con_dragonfly = None, None, None, None, None
     
     #initialize models for the different acquisition functions
     mll_qparego, model_qparego = initialize_model(train_x_qparego, train_obj_qparego, 
