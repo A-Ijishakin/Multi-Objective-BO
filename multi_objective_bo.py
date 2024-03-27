@@ -24,15 +24,18 @@ from botorch.utils.multi_objective.pareto import is_non_dominated
 from optim_configs import test_functions, input_constraints, output_constraints 
 
 
-parser = ArgumentParser()
+#instantiate the argument parser 
+parser = ArgumentParser() 
 parser.add_argument('--test_function', type=str, default='branincurrin', 
                      help='Test function to optimize') 
 parser.add_argument('--input_constraint', type=bool, default=False, 
                      help='The constraint on the test function input (if any)')  
-parser.add_argument('--output_constraint', type=bool, default=False, 
+parser.add_argument('--output_constraint', default=None, 
                         help='The constraint on the test function (if any)') 
 parser.add_argument('--noise_se', type=list, default=None) 
-parser.add_argument('--w_dragonfly', type=bool, default=True) 
+parser.add_argument('--w_dragonfly', type=bool, default=False) 
+parser.add_argument('--gpu', type=bool, default=False)
+parser.add_argument('--dtype', type=int, default=torch.double) 
 
 args = parser.parse_args() 
 hvs_all_qparego, hvs_all_qehvi, hvs_all_qnehvi, hvs_all_random, hvs_all_dragonfly = [], [], [], [], [] 
@@ -42,11 +45,13 @@ train_x_all_qparego, train_x_all_qehvi, train_x_all_qnehvi, train_x_all_random, 
 
 seed_var = 41 
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 tkwargs = {
-    "dtype": torch.double,
-    "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+    "dtype": args.dtype,
+    "device": device,
 } 
 print(f"Using device {tkwargs['device']}")
+
 
 ########
 args.test_function = 'ScattBO' #'c2dtlz2' 
@@ -54,8 +59,7 @@ args.noise_se = None #[15.19, 0.63]
 args.output_constraint = False #'c2-constraint'
 args.w_dragonfly = False  
 ########
-
-date = '26-03-2024'
+date = '27-03-2024'
 N_ITER = 5 
 MC_SAMPLES = 16 
 verbose = True
@@ -172,7 +176,7 @@ for n in tqdm(range(N_TRIALS)):
             train_obj_dragonfly = torch.cat([train_obj_dragonfly, train_con_dragonfly], dim=1) 
     
     else:
-        train_con_qparego, train_con_qehvi, train_con_qnehvi, train_con_random, train_con_dragonfly = None 
+        train_con_qparego, train_con_qehvi, train_con_qnehvi, train_con_random, train_con_dragonfly = None, None, None, None, None
     
     #initialize models for the different acquisition functions
     mll_qparego, model_qparego = initialize_model(train_x_qparego, train_obj_qparego, 
@@ -286,7 +290,8 @@ for n in tqdm(range(N_TRIALS)):
             dragonfly_opt._set_next_gp()
 
             #compute
-            new_obj_true_dragonfly = problem(new_x_dragonfly).to(tkwargs['device'])
+
+            new_obj_true_dragonfly = problem(new_x_dragonfly).to(device)
             new_obj_dragonfly = new_obj_true_dragonfly + torch.randn_like(new_obj_true_dragonfly) * NOISE_SE if args.noise_se else new_obj_true_dragonfly
             
             #
@@ -419,5 +424,3 @@ random = {'hvs': hvs_all_random, 'train_obj_true': train_obj_true_all_random, 't
 for (name, method) in zip(['qparego', 'qehvi', 'qnehvi', 'dragonfly', 'random'], [qparego, qehvi, qnehvi, dragonfly, random]):
     with open(f"MOO/runs/{date}/{name}.pkl", "wb") as f:
         pickle.dump(method, f) 
-
-breakpoint 

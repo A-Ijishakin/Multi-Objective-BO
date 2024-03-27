@@ -75,6 +75,7 @@ def initialize_model(train_x, train_obj, problem, NOISE_SE=None,
             ) 
                     
     else:
+        train_y = train_obj 
         for i in range(train_y.shape[-1]):
             models.append(
                 SingleTaskGP(
@@ -93,7 +94,7 @@ def optimize_qehvi_and_get_observation(model, train_x, sampler, problem, standar
     
         
     if output_constraint:
-        constraints = [lambda Z: Z[..., -1]] 
+        output_constraint = [lambda Z: Z[..., -1]] 
         objective=IdentityMCMultiOutputObjective(outcomes=[0, 1]) 
            
     with torch.no_grad():
@@ -107,7 +108,7 @@ def optimize_qehvi_and_get_observation(model, train_x, sampler, problem, standar
         ref_point=problem.ref_point,
         partitioning=partitioning,
         sampler=sampler,
-        constraints = constraints, 
+        constraints = output_constraint, 
         objective = objective 
     )
     # optimize
@@ -143,7 +144,7 @@ def optimize_qnehvi_and_get_observation(model, train_x,  sampler, problem, stand
     train_x = normalize(train_x, problem.bounds)  
     
     if output_constraint:
-        constraints = [lambda Z: Z[..., -1]] 
+        output_constraint = [lambda Z: Z[..., -1]] 
         objective=IdentityMCMultiOutputObjective(outcomes=[0, 1]) 
     
     acq_func = qNoisyExpectedHypervolumeImprovement(
@@ -153,8 +154,9 @@ def optimize_qnehvi_and_get_observation(model, train_x,  sampler, problem, stand
         prune_baseline=True,  # prune baseline points that have estimated zero probability of being Pareto optimal
         sampler=sampler,
         objective=objective,
-        constraints=constraints 
+        constraints=output_constraint 
     )
+    
     # optimize
     candidates, _ = optimize_acqf(
         acq_function=acq_func,
@@ -170,7 +172,6 @@ def optimize_qnehvi_and_get_observation(model, train_x,  sampler, problem, stand
     new_x = unnormalize(candidates.detach(), bounds=problem.bounds)
     new_obj_true = problem(new_x)
     
-
     new_obj = new_obj_true + torch.randn_like(new_obj_true) * NOISE_SE if NOISE_SE != None else new_obj_true 
     
     if output_constraint:
@@ -213,7 +214,7 @@ def optimize_qnparego_and_get_observation(model, train_x, sampler, problem, stan
                 X_baseline=train_x,
                 sampler=sampler,
                 prune_baseline=True,
-                constraints= constraints 
+                constraints= output_constraint
             ) 
 
         acq_func_list.append(acq_func)

@@ -14,5 +14,6 @@ domain = [
 
 input_constraints = {'ScattBO-constraint' : domain}
 
-output_constraints = {'c2-constraint' : lambda problem, x: -problem.evaluate_slack(x)}
+output_constraints = {'c2-constraint' : lambda problem, x: -problem.evaluate_slack(x), 
+                      None : None}
 
