@@ -75,6 +75,7 @@ def initialize_model(train_x, train_obj, problem, NOISE_SE=None,
             ) 
                     
     else:
+        train_y = train_obj 
         for i in range(train_y.shape[-1]):
             models.append(
                 SingleTaskGP(
@@ -155,6 +156,7 @@ def optimize_qnehvi_and_get_observation(model, train_x,  sampler, problem, stand
         objective=objective,
         constraints=output_constraint 
     )
+    
     # optimize
     candidates, _ = optimize_acqf(
         acq_function=acq_func,
@@ -170,7 +172,6 @@ def optimize_qnehvi_and_get_observation(model, train_x,  sampler, problem, stand
     new_x = unnormalize(candidates.detach(), bounds=problem.bounds)
     new_obj_true = problem(new_x)
     
-
     new_obj = new_obj_true + torch.randn_like(new_obj_true) * NOISE_SE if NOISE_SE != None else new_obj_true 
     
     if output_constraint:
