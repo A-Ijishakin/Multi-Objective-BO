@@ -1,5 +1,5 @@
 botorch==0.10.0
-dragonfly==0.1.7
+dragonfly-opt
 numpy==1.25.2
 torch==2.2.1
 tqdm==4.65.0 
