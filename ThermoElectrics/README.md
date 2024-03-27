@@ -34,7 +34,8 @@ Multi-Objective Bayesian Optimization (MOBO) can be a powerful tool in this cont
 
 ## Steps
 1. Run `python model.py`.
-2.
+2. Use [multi_objective_bo.py](../multi_objective_bo.py) with [testfunc.py](testfunc.py)
+3. Plot 
 
 ## Requirements
 
@@ -45,5 +46,8 @@ Multi-Objective Bayesian Optimization (MOBO) can be a powerful tool in this cont
 - `matplotlib`
 
 
+## Appendix
+### Default Gradient Boosting model
 
+![](fit_metrics.png)
 
