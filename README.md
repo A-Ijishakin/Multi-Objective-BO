@@ -6,26 +6,25 @@ This is the repo that we will use for the multi-objective bayesian optimisation 
 ### Using the repo
 1. Clone the repo by running: 
     ```
-    git clone https://github.com/A-Ijishakin/Contrast-DiffAE.git
+    git clone https://github.com/A-Ijishakin/BayezOpt.git
     ```
 2. Then create an environment: 
-    conda: 
+    - conda: 
     ```
     conda create --n <env> python=3.10.12
     ```
 
-    pyenv:  
+    - pyenv:  
     ```
     python3 -m venv <env>
     ```
-    where <env> is the environment name 
    
 3. Activate it: 
-   conda 
+   - conda 
    ```
    conda activate <env>
    ```
-   pyenv
+   - pyenv
    ``` 
    source <path to venv>/bin/activate 
    ``` 
