@@ -50,7 +50,15 @@ tkwargs = {
     "dtype": args.dtype,
     "device": device,
 } 
+print(f"Using device {tkwargs['device']}")
 
+
+########
+args.test_function = 'ScattBO' #'c2dtlz2' 
+args.noise_se = None #[15.19, 0.63] 
+args.output_constraint = False #'c2-constraint'
+args.w_dragonfly = False  
+########
 date = '27-03-2024'
 N_ITER = 5 
 MC_SAMPLES = 16 
@@ -59,7 +67,8 @@ verbose = True
 NOISE_SE = torch.tensor(args.noise_se, **tkwargs) if args.noise_se else args.noise_se  
 N_TRIALS = 20 
 BATCH_SIZE = 1
-problem = test_functions[args.test_function].to(**tkwargs) 
+#problem = test_functions[args.test_function].to(**tkwargs) 
+problem = test_functions[args.test_function]
 NUM_RESTARTS = 3
 RAW_SAMPLES = 4 
 standard_bounds = torch.zeros(2, problem.dim, **tkwargs)
@@ -275,12 +284,13 @@ for n in tqdm(range(N_TRIALS)):
             dragonfly_opt.step_idx += 1
 
             # Retrieve the Pareto-optimal points
-            new_x_dragonfly = torch.tensor(dragonfly_opt.ask()).to(device).unsqueeze(0) 
+            new_x_dragonfly = torch.tensor(dragonfly_opt.ask()).to(tkwargs['device']).unsqueeze(0) 
 
             dragonfly_opt._build_new_model() 
             dragonfly_opt._set_next_gp()
 
             #compute
+
             new_obj_true_dragonfly = problem(new_x_dragonfly).to(device)
             new_obj_dragonfly = new_obj_true_dragonfly + torch.randn_like(new_obj_true_dragonfly) * NOISE_SE if args.noise_se else new_obj_true_dragonfly
             
