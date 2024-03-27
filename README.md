@@ -1,21 +1,40 @@
 # Multi-Objective Bayesian Optimisation
 
-This is the repo that we will use for the multi-objective bayesian optimisation hackathon project! A pre-requisite of use is mini/anaconda so please download it from here if you do not have it:
+This is the repo that we will use for the multi-objective bayesian optimisation hackathon project! It is advised to used python 3.10.12 with this repo to ensure that the packages are downloaded without hassle.
 
-[[Miniconda Download](https://docs.anaconda.com/free/miniconda/index.html)] 
 ---------------- 
 ### Using the repo
 1. Clone the repo by running: 
     ```
     git clone https://github.com/A-Ijishakin/Contrast-DiffAE.git
     ```
-2. Then run the command:
+2. Then create an environment: 
+    conda: 
     ```
-    conda create --name <env> --file requirements.txt
+    conda create --n <env> python=3.10.12
+    ```
+
+    pyenv:  
+    ```
+    python3 -m venv <env>
     ```
     where <env> is the environment name 
+   
+3. Activate it: 
+   conda 
+   ```
+   conda activate <env>
+   ```
+   pyenv
+   ``` 
+   source <path to venv>/bin/activate 
+   ``` 
+4. Then run:
+   ```
+   pip install -r requirements.txt
+   ```
 
-3. You will now be able to use the multi_objective_bo.py script, which takes the following system arguments: 
+5. You will now be able to use the multi_objective_bo.py script, which takes the following system arguments: 
     - test_function: The type of test function we are using, this will be selected from those specified in optim_configs.py/ 
     - input_constraint: This specifies a type of input constraint, which should be defined in optim_configs.py. 
     - output_constraint: The same as above but for output constraints/
