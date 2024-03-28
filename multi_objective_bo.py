@@ -23,7 +23,6 @@ from botorch.utils.multi_objective.hypervolume import Hypervolume
 from botorch.utils.multi_objective.pareto import is_non_dominated 
 from optim_configs import test_functions, input_constraints, output_constraints, generate_structure, ScatterBO_small_benchmark
 
-
 #instantiate the argument parser 
 parser = ArgumentParser() 
 parser.add_argument('--test_function', type=str, default='branincurrin', 
@@ -80,6 +79,8 @@ standard_bounds[1] = 1
 num_constraints = 1 if args.output_constraint else 0 
 warnings.filterwarnings("ignore", category=BadInitialCandidatesWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+scale = -1 if args.test_function == 'ScattBO' else 1
 
 for n in tqdm(range(N_TRIALS)): 
     if verbose:
@@ -141,10 +142,9 @@ for n in tqdm(range(N_TRIALS)):
     initial_data = generate_initial_data(problem=problem, 
                     NOISE_SE=NOISE_SE, n=4, test_function=args.test_function, root_dir=args.sb_dir)
 
-    train_x_qparego, train_obj_qparego, train_obj_true_qparego = (initial_data['train_x'], 
-                                                                  initial_data['train_obj'], 
-                                                                  initial_data['train_obj_true'])   
-
+    train_x_qparego, train_obj_qparego, train_obj_true_qparego = (initial_data['train_x'].to(**tkwargs), 
+                                                                  initial_data['train_obj'].to(**tkwargs) * scale, 
+                                                                  initial_data['train_obj_true'].to(**tkwargs) * scale)    
     train_x_qehvi, train_obj_qehvi, train_obj_true_qehvi = (
         train_x_qparego,
         train_obj_qparego,
@@ -159,9 +159,7 @@ for n in tqdm(range(N_TRIALS)):
         train_x_qparego,
         train_obj_qparego,
         train_obj_true_qparego 
-    )
-
-    
+    ) 
     if args.w_dragonfly:
         train_x_dragonfly, train_obj_dragonfly, train_obj_true_dragonfly = (
             train_x_qparego,
@@ -171,8 +169,6 @@ for n in tqdm(range(N_TRIALS)):
     
     else:
         train_obj_true_dragonfly, train_con_dragonfly = None, 0  
-    
-    
     if args.output_constraint:
         train_con_qparego =  output_constraints[args.output_constraint](problem, train_x_qparego)  
         train_con_qehvi, train_con_qnehvi, train_con_random  = train_con_qparego, train_con_qparego, train_con_qparego
@@ -185,12 +181,11 @@ for n in tqdm(range(N_TRIALS)):
     
     #initialize models for the different acquisition functions
     mll_qparego, model_qparego = initialize_model(train_x_qparego, train_obj_qparego, 
-                                    problem=problem, NOISE_SE=NOISE_SE, train_con=train_con_qparego)
+                                    problem=problem, NOISE_SE=NOISE_SE, train_con=train_con_qparego, tkwargs=tkwargs)
     mll_qehvi, model_qehvi = initialize_model(train_x_qehvi, train_obj_qehvi, 
-                                    problem=problem, NOISE_SE=NOISE_SE, train_con=train_con_qehvi)
+                                    problem=problem, NOISE_SE=NOISE_SE, train_con=train_con_qehvi, tkwargs=tkwargs)
     mll_qnehvi, model_qnehvi = initialize_model(train_x_qnehvi, train_obj_qnehvi, 
-                                    problem=problem, NOISE_SE=NOISE_SE, train_con=train_con_qnehvi)
-
+                                    problem=problem, NOISE_SE=NOISE_SE, train_con=train_con_qnehvi, tkwargs=tkwargs)
     if args.output_constraint: 
         hv = Hypervolume(ref_point=problem.ref_point) 
         # compute pareto front
@@ -203,16 +198,13 @@ for n in tqdm(range(N_TRIALS)):
             volume = hv.compute(pareto_y)
         else:
             volume = 0.0
-    else:     
-        
+    else:    
         if args.test_function == 'ScattBO':
-            volume = ScatterBO_small_benchmark(train_obj_true_qparego) 
+            volume = torch.mean(train_obj_qparego, dim=0).sum() 
         else:
             # compute hypervolume
             bd = DominatedPartitioning(ref_point=problem.ref_point, Y=train_obj_true_qparego)
-            volume = bd.compute_hypervolume().item()
-            
-    
+            volume = bd.compute_hypervolume().item() 
     eval_qparego.append(volume)
     eval_qehvi.append(volume)
     eval_qnehvi.append(volume)
@@ -238,32 +230,32 @@ for n in tqdm(range(N_TRIALS)):
             model=model_qparego, train_x=train_x_qparego, sampler=qparego_sampler, 
             problem=problem, standard_bounds=standard_bounds, BATCH_SIZE=BATCH_SIZE,
             NUM_RESTARTS=NUM_RESTARTS, RAW_SAMPLES=RAW_SAMPLES, NOISE_SE=NOISE_SE, 
+            test_function=args.test_function,   
             tkwargs=tkwargs, train_obj=train_obj_qparego, output_constraint=output_constraints[args.output_constraint], 
         )
-        
         (
             new_x_qparego,
             new_obj_qparego,
             new_obj_true_qparego,
-            new_con_qparego) = (qn_parego_optimized_and_observed['new_x'], qn_parego_optimized_and_observed['new_obj'], 
-                            qn_parego_optimized_and_observed['new_obj_true'], qn_parego_optimized_and_observed['new_con']) 
+            new_con_qparego) = (qn_parego_optimized_and_observed['new_x'], qn_parego_optimized_and_observed['new_obj'] * scale, 
+                            qn_parego_optimized_and_observed['new_obj_true'] * scale, qn_parego_optimized_and_observed['new_con']) 
                             
         qehvi_optimized_and_observed = optimize_qehvi_and_get_observation(
-            model=model_qehvi, train_x=train_x_qehvi, sampler=qehvi_sampler, 
-            problem=problem, standard_bounds=standard_bounds, 
-            BATCH_SIZE=BATCH_SIZE, NUM_RESTARTS=NUM_RESTARTS, RAW_SAMPLES=RAW_SAMPLES, 
+            model=model_qehvi.to(tkwargs['device']), train_x=train_x_qehvi.to(tkwargs['device']), sampler=qehvi_sampler, 
+            problem=problem, standard_bounds=standard_bounds, tkwargs=tkwargs,
+            BATCH_SIZE=BATCH_SIZE, NUM_RESTARTS=NUM_RESTARTS, RAW_SAMPLES=RAW_SAMPLES, test_function=args.test_function, 
             NOISE_SE=NOISE_SE, output_constraint=output_constraints[args.output_constraint] 
-        ) 
-                
+        )       
         ( 
             new_x_qehvi, 
             new_obj_qehvi, 
             new_obj_true_qehvi, 
-            new_con_qparego ) = ( qehvi_optimized_and_observed['new_x'], qehvi_optimized_and_observed['new_obj'],
-                                  qehvi_optimized_and_observed['new_obj_true'], qehvi_optimized_and_observed['new_con']) 
+            new_con_qparego ) = ( qehvi_optimized_and_observed['new_x'], qehvi_optimized_and_observed['new_obj'] * scale,
+                                  qehvi_optimized_and_observed['new_obj_true'] * scale, qehvi_optimized_and_observed['new_con']) 
         
-        qnehvi_optimized_and_observed = optimize_qnehvi_and_get_observation( model=model_qnehvi, train_x=train_x_qnehvi, sampler=qnehvi_sampler, 
-             problem=problem, standard_bounds=standard_bounds, BATCH_SIZE=BATCH_SIZE, 
+        qnehvi_optimized_and_observed = optimize_qnehvi_and_get_observation( model=model_qnehvi.to(tkwargs['device']), train_x=train_x_qehvi.to(tkwargs['device']), sampler=qnehvi_sampler, 
+             problem=problem, standard_bounds=standard_bounds, BATCH_SIZE=BATCH_SIZE, test_function=args.test_function,
+                                         tkwargs=tkwargs,
                                         NUM_RESTARTS=NUM_RESTARTS, RAW_SAMPLES=RAW_SAMPLES, NOISE_SE=NOISE_SE, 
                                         output_constraint=output_constraints[args.output_constraint]) 
         (
@@ -271,15 +263,15 @@ for n in tqdm(range(N_TRIALS)):
             new_obj_qnehvi,
             new_obj_true_qnehvi,
             new_con_qnehvi 
-        ) = (qnehvi_optimized_and_observed['new_x'], qnehvi_optimized_and_observed['new_obj'], 
-             qnehvi_optimized_and_observed['new_obj_true'], qnehvi_optimized_and_observed['new_con']) 
+        ) = (qnehvi_optimized_and_observed['new_x'], qnehvi_optimized_and_observed['new_obj'] * scale, 
+             qnehvi_optimized_and_observed['new_obj_true'] * scale, qnehvi_optimized_and_observed['new_con']) 
         
         new_random = generate_initial_data(problem=problem, 
-                    NOISE_SE=NOISE_SE, n=BATCH_SIZE) 
+                NOISE_SE=NOISE_SE, n=BATCH_SIZE, test_function=args.test_function, root_dir=args.sb_dir) 
         
         new_x_random, new_obj_random, new_obj_true_random = (new_random['train_x'],
-                                                             new_random['train_obj'],
-                                                                new_random['train_obj_true']) 
+                                                             new_random['train_obj'] * scale,
+                                                                new_random['train_obj_true'] * scale) 
         
         if args.w_dragonfly:
             for (x, y) in zip(train_x_dragonfly, train_obj_dragonfly):
@@ -299,7 +291,6 @@ for n in tqdm(range(N_TRIALS)):
             dragonfly_opt._set_next_gp()
 
             #compute
-
             new_obj_true_dragonfly = problem(new_x_dragonfly).to(device)
             new_obj_dragonfly = new_obj_true_dragonfly + torch.randn_like(new_obj_true_dragonfly) * NOISE_SE if args.noise_se else new_obj_true_dragonfly
             
@@ -327,9 +318,9 @@ for n in tqdm(range(N_TRIALS)):
         train_obj_true_qnehvi = torch.cat([train_obj_true_qnehvi, new_obj_true_qnehvi])
 
 
-        train_x_random = torch.cat([train_x_random, new_x_random])
-        train_obj_random = torch.cat([train_obj_random, new_obj_random])
-        train_obj_true_random = torch.cat([train_obj_true_random, new_obj_true_random])
+        train_x_random = torch.cat([train_x_random, new_x_random.to(**tkwargs)])
+        train_obj_random = torch.cat([train_obj_random, new_obj_random.to(**tkwargs)])
+        train_obj_true_random = torch.cat([train_obj_true_random, new_obj_true_random.to(**tkwargs)])
 
         if args.output_constraint:
             train_con_qparego = torch.cat([train_con_qparego, new_con_qparego])
@@ -340,9 +331,10 @@ for n in tqdm(range(N_TRIALS)):
             
             train_con_random = torch.cat([train_con_random, output_constraints[args.output_constraint](problem, new_x_random)]) 
         
+        
         # update progress
         for eval_list, train_obj, train_con in zip(
-            (eval_random, eval_qparego, eval_qehvi, eval_qnehvi, eval_dragonfly),
+            (eval_random, eval_qparego, eval_qehvi, eval_qnehvi, eval_dragonfly), 
             (
                 train_obj_true_random,
                 train_obj_true_qparego,
@@ -376,8 +368,8 @@ for n in tqdm(range(N_TRIALS)):
                 eval_list.append(volume)
             
             elif args.test_function == 'ScattBO':
-                volume = generate_structure(train_obj)
-                eval_list.append(volume) 
+                volume = torch.mean(train_obj[-BATCH_SIZE:], dim=0).sum().item()
+                eval_list.append(volume * scale) 
                 
             else:
                 # compute hypervolume
@@ -388,9 +380,9 @@ for n in tqdm(range(N_TRIALS)):
         # reinitialize the models so they are ready for fitting on next iteration
         # Note: we find improved performance from not warm starting the model hyperparameters
         # using the hyperparameters from the previous iteration
-        mll_qparego, model_qparego = initialize_model(train_x_qparego, train_obj_qparego, problem=problem, NOISE_SE=NOISE_SE, train_con=train_con_qparego)
-        mll_qehvi, model_qehvi = initialize_model(train_x_qehvi, train_obj_qehvi, problem=problem, NOISE_SE=NOISE_SE, train_con=train_con_qehvi)
-        mll_qnehvi, model_qnehvi = initialize_model(train_x_qnehvi, train_obj_qnehvi, problem=problem, NOISE_SE=NOISE_SE, train_con=train_con_qnehvi)
+        mll_qparego, model_qparego = initialize_model(train_x_qparego, train_obj_qparego, problem=problem, NOISE_SE=NOISE_SE, train_con=train_con_qparego, tkwargs=tkwargs)
+        mll_qehvi, model_qehvi = initialize_model(train_x_qehvi, train_obj_qehvi, problem=problem, NOISE_SE=NOISE_SE, train_con=train_con_qehvi, tkwargs=tkwargs)
+        mll_qnehvi, model_qnehvi = initialize_model(train_x_qnehvi, train_obj_qnehvi, problem=problem, NOISE_SE=NOISE_SE, train_con=train_con_qnehvi, tkwargs=tkwargs)  
 
         # dragonfly_opt._build_new_model()
         # dragonfly_opt._set_next_gp()
@@ -420,7 +412,8 @@ for n in tqdm(range(N_TRIALS)):
     
     train_x_all_qparego.append(train_x_qparego), train_x_all_qehvi.append(train_x_qehvi), 
     train_x_all_qnehvi.append(train_x_qnehvi), train_x_all_random.append(train_x_random), 
-    train_x_all_dragonfly.append(train_x_dragonfly) 
+    if args.w_dragonfly:
+        train_x_all_dragonfly.append(train_x_dragonfly) 
 
 qparego = {'eval': eval_all_qparego, 'train_obj_true': train_obj_true_all_qparego, 'train_obj': train_obj_all_qparego, 
            'train_x': train_x_all_qparego, 'method': 'qparego'} 
@@ -428,7 +421,8 @@ qehvi = {'eval': eval_all_qehvi, 'train_obj_true': train_obj_true_all_qehvi, 'tr
          'train_x': train_x_all_qehvi, 'method': 'qehvi'}
 qnehvi = {'eval': eval_all_qnehvi, 'train_obj_true': train_obj_true_all_qnehvi, 'train_obj': train_obj_all_qnehvi,
           'train_x': train_x_all_qnehvi, 'method': 'qnehvi'}
-dragonfly = {'eval': eval_all_dragonfly, 'train_obj_true': train_obj_true_all_dragonfly, 'train_obj': train_obj_all_dragonfly,
+if args.w_dragonfly:
+    dragonfly = {'eval': eval_all_dragonfly, 'train_obj_true': train_obj_true_all_dragonfly, 'train_obj': train_obj_all_dragonfly,
              'train_x': train_x_all_dragonfly, 'method': 'dragonfly'}
 random = {'eval': eval_all_random, 'train_obj_true': train_obj_true_all_random, 'train_obj': train_obj_all_random,
           'train_x': train_x_all_random, 'method': 'random'} 

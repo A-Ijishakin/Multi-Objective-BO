@@ -5,6 +5,8 @@ from ScattBO.utils.ScattBO import generate_structure, ScatterBO_small_benchmark,
 scat_bo = ScatterBO_small_benchmark 
 scat_bo.dim = 3  
 scat_bo.bounds = torch.tensor([(2.0, 15.0, 0.0), (12.0, 80.0, 1.0)]) 
+scat_bo.num_objectives = 2
+scat_bo.ref_point = torch.tensor([2.5, 2.5]) 
 
 test_functions = {'branincurrin': BraninCurrin(negate=True), 
                   'c2dtlz2': C2DTLZ2(dim=4, num_objectives=2, negate=True),
