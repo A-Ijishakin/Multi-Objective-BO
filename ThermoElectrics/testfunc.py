@@ -8,7 +8,8 @@ def call_model(features,model_file="gbr_model.joblib"):
     seebeck, sigma, kappa = reverse_target_norm(model.predict(features_arry)[0])
     return seebeck, sigma, kappa
 
-def test_thermoelectric_BaCrSe(ba_comp,cr_comp,se_comp,temperature):
+def test_thermoelectric_BaCrSe(ba_comp,cr_comp,temperature):
+    se_comp = 1.0 - ba_comp - cr_comp
     assert sum([ba_comp,cr_comp,se_comp]) == 1.0
     formula = f"Ba{ba_comp}Cr{cr_comp}Se{se_comp}"
     features = featurize(formula,temperature=temperature)
