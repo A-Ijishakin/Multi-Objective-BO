@@ -1,6 +1,7 @@
 import torch
 from  argparse import ArgumentParser 
 import warnings 
+import os 
 import time
 from botorch import fit_gpytorch_mll
 from botorch.exceptions import BadInitialCandidatesWarning
@@ -59,17 +60,17 @@ print(f"Using device {tkwargs['device']}")
 
 ########
 args.test_function = 'ScattBO' #'c2dtlz2' 
-args.w_dragonfly = False  
+args.w_dragonfly = True  
 args.sb_dir = 'ScattBO'
 ########
-date = '27-03-2024'
-N_ITER = 5 
+date = '28-03-2024'
+N_ITER = 1  
 MC_SAMPLES = 16 
 verbose = True
 #if there is noise specified than instantiate it's standard error else leave it as None 
 NOISE_SE = torch.tensor(args.noise_se, **tkwargs) if args.noise_se else args.noise_se  
-N_TRIALS = 20 
-BATCH_SIZE = 1
+N_TRIALS = 1 
+BATCH_SIZE = 1 
 #problem = test_functions[args.test_function].to(**tkwargs) 
 problem = test_functions[args.test_function]
 NUM_RESTARTS = 3
@@ -117,11 +118,20 @@ for n in tqdm(range(N_TRIALS)):
         else:
             domain_constraints = None 
         
+        if args.test_function == 'ScattBO':
+            config_params = {    'domain': [{'type': 'float', 'min': 2.0, 'max': 12.0}, 
+                                        {'type': 'float', 'min': 15.0, 'max': 80.0},  
+                                        {'type': 'discrete_numeric', 'items': [0, 1]}],
+                                    # {'type': 'discrete_euclidean', 'items': [[np.array([0,1])], [np.array([0, 1])]]} ]    
+                             
+                        } 
+            
+        else:
         # Create optimizer object
-        config_params = {
-            'domain': [{'type': 'float', 'min': 0.0, 'max': 1.0} for _ in range(problem.dim)],
-            'domain_constraints': domain_constraints    
-        }
+            config_params = {
+                'domain': [{'type': 'float', 'min': 0.0, 'max': 1.0} for _ in range(problem.dim)],
+                'domain_constraints': domain_constraints    
+            }
         config = load_config(config_params)
 
         func_caller = CPMultiFunctionCaller(None, config.domain,
@@ -200,7 +210,9 @@ for n in tqdm(range(N_TRIALS)):
             volume = 0.0
     else:    
         if args.test_function == 'ScattBO':
-            volume = torch.mean(train_obj_qparego, dim=0).sum() 
+            #find the row of values which have the smallest sum across the columns
+            volume =  - torch.max( torch.stack( [ train_obj_qparego[idx, 0] + train_obj_qparego[idx, 1]  for idx in range(len(train_obj_qparego))  ])).item()
+        
         else:
             # compute hypervolume
             bd = DominatedPartitioning(ref_point=problem.ref_point, Y=train_obj_true_qparego)
@@ -284,14 +296,23 @@ for n in tqdm(range(N_TRIALS)):
             ##### 
             dragonfly_opt.step_idx += 1
 
+                        
+            dragonfly_opt._build_new_model() 
+            dragonfly_opt._set_next_gp()
             # Retrieve the Pareto-optimal points
             new_x_dragonfly = torch.tensor(dragonfly_opt.ask()).to(tkwargs['device']).unsqueeze(0) 
 
-            dragonfly_opt._build_new_model() 
-            dragonfly_opt._set_next_gp()
-
             #compute
-            new_obj_true_dragonfly = problem(new_x_dragonfly).to(device)
+            if args.test_function == 'ScattBO':
+                new_obj_dragonfly = torch.zeros(BATCH_SIZE, 2) 
+                for idx in range(BATCH_SIZE): 
+                    datum = tuple([datum.item() for datum in new_x_dragonfly[idx]])
+                    new_obj_dragonfly[idx] = problem(datum, root_dir='ScattBO') 
+                new_obj_dragonfly = new_obj_dragonfly.to(**tkwargs) * scale 
+            else:
+                new_obj_dragonfly = problem(new_x_dragonfly).to(**tkwargs) * scale 
+                
+            new_obj_true_dragonfly = new_obj_dragonfly 
             new_obj_dragonfly = new_obj_true_dragonfly + torch.randn_like(new_obj_true_dragonfly) * NOISE_SE if args.noise_se else new_obj_true_dragonfly
             
             #
@@ -368,8 +389,8 @@ for n in tqdm(range(N_TRIALS)):
                 eval_list.append(volume)
             
             elif args.test_function == 'ScattBO':
-                volume = torch.mean(train_obj[-BATCH_SIZE:], dim=0).sum().item()
-                eval_list.append(volume * scale) 
+                volume =  - torch.max( torch.stack( [ train_obj_qparego[idx, 0] + train_obj[idx, 1]  for idx in range(len(train_obj))  ])).item()
+                eval_list.append(volume) 
                 
             else:
                 # compute hypervolume
@@ -428,5 +449,7 @@ random = {'eval': eval_all_random, 'train_obj_true': train_obj_true_all_random, 
           'train_x': train_x_all_random, 'method': 'random'} 
 
 for (name, method) in zip(['qparego', 'qehvi', 'qnehvi', 'dragonfly', 'random'], [qparego, qehvi, qnehvi, dragonfly, random]):
-    with open(f"MOO/runs/{date}/{name}.pkl", "wb") as f:
+    if not os.path.exists(f"runs/{date}/{name}"):
+        os.makedirs(f"runs/{date}/{name}") 
+    with open(f"runs/{date}/{name}.pkl", "wb") as f:
         pickle.dump(method, f) 
