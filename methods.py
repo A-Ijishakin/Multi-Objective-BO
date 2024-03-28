@@ -42,11 +42,26 @@ def load_pickles(files, root='MOO/runs'):
     return tuple(outputs) 
     
 def generate_initial_data(problem, NOISE_SE=None, n=6, 
-                          train_obj_true=None):
-    # generate training data
-    train_x = draw_sobol_samples(bounds=problem.bounds, n=n, q=1).squeeze(1)
-    train_obj_true = problem(train_x) 
+                          train_obj_true=None, test_function=None, root_dir=''):
 
+    if test_function == 'ScattBO':
+        train_x = draw_sobol_samples(bounds=torch.tensor([(2.0, 20.0), 
+                                                          (12.0, 80.0)]) , n=n, q=1).squeeze(1)
+        #randomly sample a 0 or a 1 in a torch tensor 
+        solvent = torch.randint(0, 2, (n, 1)).float() 
+        train_x = torch.cat([train_x, solvent], dim=-1)
+
+        train_obj_true = torch.zeros(n, 2) 
+        
+        for idx in range(n): 
+            datum = tuple([round(datum.item(), 2) for datum in train_x[idx]])
+            train_obj_true[idx] = problem(datum, root_dir=root_dir) 
+
+    else:
+        # generate training data
+        train_x = draw_sobol_samples(bounds=problem.bounds, n=n, q=1).squeeze(1)
+        train_obj_true = problem(train_x) 
+    
     if NOISE_SE != None:
         train_obj = train_obj_true + torch.randn_like(train_obj_true) * NOISE_SE 
     else:
@@ -58,7 +73,7 @@ def generate_initial_data(problem, NOISE_SE=None, n=6,
 def initialize_model(train_x, train_obj, problem, NOISE_SE=None, 
                      train_con=None):
     # define models for objective and constraint
-    train_x = normalize(train_x, problem.bounds)
+    train_x = normalize(train_x, problem.bounds) 
     models = [] 
     
     if train_con != None:

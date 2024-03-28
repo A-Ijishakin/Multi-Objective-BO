@@ -21,7 +21,7 @@ import numpy as np
 import pickle 
 from botorch.utils.multi_objective.hypervolume import Hypervolume 
 from botorch.utils.multi_objective.pareto import is_non_dominated 
-from optim_configs import test_functions, input_constraints, output_constraints 
+from optim_configs import test_functions, input_constraints, output_constraints, generate_structure, ScatterBO_small_benchmark
 
 
 #instantiate the argument parser 
@@ -36,9 +36,15 @@ parser.add_argument('--noise_se', type=list, default=None)
 parser.add_argument('--w_dragonfly', type=bool, default=False) 
 parser.add_argument('--gpu', type=bool, default=False)
 parser.add_argument('--dtype', type=int, default=torch.double) 
+parser.add_argument('--sb_dir', type=str, default='')
 
 args = parser.parse_args() 
-hvs_all_qparego, hvs_all_qehvi, hvs_all_qnehvi, hvs_all_random, hvs_all_dragonfly = [], [], [], [], [] 
+
+if args.test_function == 'ScattBO':
+    eval_metric = 'Scatter'
+
+
+eval_all_qparego, eval_all_qehvi, eval_all_qnehvi, eval_all_random, eval_all_dragonfly = [], [], [], [], [] 
 train_obj_true_all_qparego, train_obj_true_all_qehvi, train_obj_true_all_qnehvi, train_obj_true_all_random, train_obj_true_all_dragonfly = [], [], [], [], [] 
 train_obj_all_qparego, train_obj_all_qehvi, train_obj_all_qnehvi, train_obj_all_random, train_obj_all_dragonfly = [], [], [], [], [] 
 train_x_all_qparego, train_x_all_qehvi, train_x_all_qnehvi, train_x_all_random, train_x_all_dragonfly = [], [], [], [], []
@@ -52,12 +58,10 @@ tkwargs = {
 } 
 print(f"Using device {tkwargs['device']}")
 
-
 ########
 args.test_function = 'ScattBO' #'c2dtlz2' 
-args.noise_se = None #[15.19, 0.63] 
-args.output_constraint = False #'c2-constraint'
 args.w_dragonfly = False  
+args.sb_dir = 'ScattBO'
 ########
 date = '27-03-2024'
 N_ITER = 5 
@@ -131,10 +135,11 @@ for n in tqdm(range(N_TRIALS)):
         dragonfly_opt.initialise()
         dragonfly_opt.ask()
 
-    hvs_qparego, hvs_qehvi, hvs_qnehvi, hvs_random, hvs_dragonfly = [], [], [], [], []  
+    eval_qparego, eval_qehvi, eval_qnehvi, eval_random, eval_dragonfly = [], [], [], [], []  
     
+
     initial_data = generate_initial_data(problem=problem, 
-                    NOISE_SE=NOISE_SE, n=4)
+                    NOISE_SE=NOISE_SE, n=4, test_function=args.test_function, root_dir=args.sb_dir)
 
     train_x_qparego, train_obj_qparego, train_obj_true_qparego = (initial_data['train_x'], 
                                                                   initial_data['train_obj'], 
@@ -199,23 +204,27 @@ for n in tqdm(range(N_TRIALS)):
         else:
             volume = 0.0
     else:     
-        # compute hypervolume
-        bd = DominatedPartitioning(ref_point=problem.ref_point, Y=train_obj_true_qparego)
-        volume = bd.compute_hypervolume().item()
         
+        if args.test_function == 'ScattBO':
+            volume = ScatterBO_small_benchmark(train_obj_true_qparego) 
+        else:
+            # compute hypervolume
+            bd = DominatedPartitioning(ref_point=problem.ref_point, Y=train_obj_true_qparego)
+            volume = bd.compute_hypervolume().item()
+            
     
-    hvs_qparego.append(volume)
-    hvs_qehvi.append(volume)
-    hvs_qnehvi.append(volume)
-    hvs_random.append(volume)
-    hvs_dragonfly.append(volume)
+    eval_qparego.append(volume)
+    eval_qehvi.append(volume)
+    eval_qnehvi.append(volume)
+    eval_random.append(volume)
+    eval_dragonfly.append(volume)
 
     # run N_ITER rounds of BayesOpt after the initial random batch
     for iteration in range(1, N_ITER + 1):
         t0 = time.monotonic()
 
         # fit the models
-        fit_gpytorch_mll(mll_qparego)
+        fit_gpytorch_mll(mll_qparego) 
         fit_gpytorch_mll(mll_qehvi)
         fit_gpytorch_mll(mll_qnehvi)
 
@@ -332,8 +341,8 @@ for n in tqdm(range(N_TRIALS)):
             train_con_random = torch.cat([train_con_random, output_constraints[args.output_constraint](problem, new_x_random)]) 
         
         # update progress
-        for hvs_list, train_obj, train_con in zip(
-            (hvs_random, hvs_qparego, hvs_qehvi, hvs_qnehvi, hvs_dragonfly),
+        for eval_list, train_obj, train_con in zip(
+            (eval_random, eval_qparego, eval_qehvi, eval_qnehvi, eval_dragonfly),
             (
                 train_obj_true_random,
                 train_obj_true_qparego,
@@ -364,14 +373,17 @@ for n in tqdm(range(N_TRIALS)):
                     volume = hv.compute(pareto_y)
                 else:
                     volume = 0.0
-                hvs_list.append(volume)
-                
+                eval_list.append(volume)
+            
+            elif args.test_function == 'ScattBO':
+                volume = generate_structure(train_obj)
+                eval_list.append(volume) 
                 
             else:
                 # compute hypervolume
                 bd = DominatedPartitioning(ref_point=problem.ref_point, Y=train_obj)
                 volume = bd.compute_hypervolume().item()
-                hvs_list.append(volume)
+                eval_list.append(volume)
 
         # reinitialize the models so they are ready for fitting on next iteration
         # Note: we find improved performance from not warm starting the model hyperparameters
@@ -387,15 +399,15 @@ for n in tqdm(range(N_TRIALS)):
         if verbose:
             print(
                 f"\nBatch {iteration:>2}: Hypervolume (random, qNParEGO, qEHVI, qNEHVI, dragonfly) = "
-                f"({hvs_random[-1]:>4.2f}, {hvs_qparego[-1]:>4.2f}, {hvs_qehvi[-1]:>4.2f}, {hvs_qnehvi[-1]:>4.2f}, {hvs_dragonfly[-1]:>4.2f}), "
+                f"({eval_random[-1]:>4.2f}, {eval_qparego[-1]:>4.2f}, {eval_qehvi[-1]:>4.2f}, {eval_qnehvi[-1]:>4.2f}, {eval_dragonfly[-1]:>4.2f}), "
                 f"time = {t1-t0:>4.2f}.",
                 end="",
             )
         else:
             print(".", end="")  
 
-    hvs_all_dragonfly.append(hvs_dragonfly), hvs_all_qehvi.append(hvs_qehvi), hvs_all_qnehvi.append(hvs_qnehvi) 
-    hvs_all_qparego.append(hvs_qparego), hvs_all_random.append(hvs_random) 
+    eval_all_dragonfly.append(eval_dragonfly), eval_all_qehvi.append(eval_qehvi), eval_all_qnehvi.append(eval_qnehvi) 
+    eval_all_qparego.append(eval_qparego), eval_all_random.append(eval_random) 
     
     train_obj_true_all_qparego.append(train_obj_true_qparego), train_obj_true_all_qehvi.append(train_obj_true_qehvi) 
     train_obj_true_all_qnehvi.append(train_obj_true_qnehvi), train_obj_true_all_random.append(train_obj_true_random) 
@@ -410,15 +422,15 @@ for n in tqdm(range(N_TRIALS)):
     train_x_all_qnehvi.append(train_x_qnehvi), train_x_all_random.append(train_x_random), 
     train_x_all_dragonfly.append(train_x_dragonfly) 
 
-qparego = {'hvs': hvs_all_qparego, 'train_obj_true': train_obj_true_all_qparego, 'train_obj': train_obj_all_qparego, 
+qparego = {'eval': eval_all_qparego, 'train_obj_true': train_obj_true_all_qparego, 'train_obj': train_obj_all_qparego, 
            'train_x': train_x_all_qparego, 'method': 'qparego'} 
-qehvi = {'hvs': hvs_all_qehvi, 'train_obj_true': train_obj_true_all_qehvi, 'train_obj': train_obj_all_qehvi,
+qehvi = {'eval': eval_all_qehvi, 'train_obj_true': train_obj_true_all_qehvi, 'train_obj': train_obj_all_qehvi,
          'train_x': train_x_all_qehvi, 'method': 'qehvi'}
-qnehvi = {'hvs': hvs_all_qnehvi, 'train_obj_true': train_obj_true_all_qnehvi, 'train_obj': train_obj_all_qnehvi,
+qnehvi = {'eval': eval_all_qnehvi, 'train_obj_true': train_obj_true_all_qnehvi, 'train_obj': train_obj_all_qnehvi,
           'train_x': train_x_all_qnehvi, 'method': 'qnehvi'}
-dragonfly = {'hvs': hvs_all_dragonfly, 'train_obj_true': train_obj_true_all_dragonfly, 'train_obj': train_obj_all_dragonfly,
+dragonfly = {'eval': eval_all_dragonfly, 'train_obj_true': train_obj_true_all_dragonfly, 'train_obj': train_obj_all_dragonfly,
              'train_x': train_x_all_dragonfly, 'method': 'dragonfly'}
-random = {'hvs': hvs_all_random, 'train_obj_true': train_obj_true_all_random, 'train_obj': train_obj_all_random,
+random = {'eval': eval_all_random, 'train_obj_true': train_obj_true_all_random, 'train_obj': train_obj_all_random,
           'train_x': train_x_all_random, 'method': 'random'} 
 
 for (name, method) in zip(['qparego', 'qehvi', 'qnehvi', 'dragonfly', 'random'], [qparego, qehvi, qnehvi, dragonfly, random]):

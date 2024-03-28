@@ -19,18 +19,18 @@ problem = BraninCurrin(negate=True).to(**tkwargs)
 qparego, qehvi, qnehvi, random, dragonfly = load_pickles(files=['qparego.pkl', 'qehvi.pkl', 
                                                          'qnehvi.pkl', 'random.pkl', 'dragonfly.pkl'], root='MOO/runs/21-03-2024') 
 
-hvs_qparego, hvs_qehvi, hvs_qnehvi, hvs_random, hvs_dragonfly = qparego['hvs'], qehvi['hvs'], qnehvi['hvs'], random['hvs'], dragonfly['hvs']
+eval_qparego, eval_qehvi, eval_qnehvi, eval_random, eval_dragonfly = qparego['eval'], qehvi['eval'], qnehvi['eval'], random['eval'], dragonfly['eval']
 train_obj_true_random, train_obj_true_qparego = qparego['train_obj_true'], qparego['train_obj_true']
 train_obj_true_qehvi, train_obj_true_qnehvi = qehvi['train_obj_true'], qnehvi['train_obj_true'] 
 train_obj_true_dragonfly = dragonfly['train_obj_true'] 
 
 iters = np.arange(N_ITER + 1) * BATCH_SIZE
 
-log_hv_difference_qparego = np.log10(problem.max_hv - np.asarray(hvs_qparego))
-log_hv_difference_qehvi = np.log10(problem.max_hv - np.asarray(hvs_qehvi))
-log_hv_difference_qnehvi = np.log10(problem.max_hv - np.asarray(hvs_qnehvi))
-log_hv_difference_rnd = np.log10(problem.max_hv - np.asarray(hvs_random)) 
-log_hv_difference_dragonfly = np.log10(problem.max_hv - np.asarray(hvs_dragonfly)) 
+log_hv_difference_qparego = np.log10(problem.max_hv - np.asarray(eval_qparego))
+log_hv_difference_qehvi = np.log10(problem.max_hv - np.asarray(eval_qehvi))
+log_hv_difference_qnehvi = np.log10(problem.max_hv - np.asarray(eval_qnehvi))
+log_hv_difference_rnd = np.log10(problem.max_hv - np.asarray(eval_random)) 
+log_hv_difference_dragonfly = np.log10(problem.max_hv - np.asarray(eval_dragonfly)) 
 
 fig, ax = plt.subplots(1, 1, figsize=(8, 6)) 
 ax.errorbar(

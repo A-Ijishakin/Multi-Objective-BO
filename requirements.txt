@@ -4,3 +4,4 @@ numpy==1.25.2
 torch==2.2.1
 tqdm==4.65.0 
 matplotlib==3.7.1 
+ase==3.22.1
