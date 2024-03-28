@@ -27,7 +27,7 @@ def get_datasets():
     return filepath
 
 
-def featurize_and_targets(dataset, element_map="magpie",scale_path="target_norm.joblib"):
+def featurize_and_targets(dataset, element_map="magpie",scale_path="ThermoElectrics/target_norm.joblib"):
     """
     Featurizes the 'Formula' column of a dataset using the specified element map and includes temperature as a feature.
     Splits the dataset into a features DataFrame containing only the featurized vectors and temperature, 
@@ -76,7 +76,7 @@ def featurize(composition,element_map="magpie",temperature=300.0):
     features += featurizer.featurize(Composition(composition))
     return features
 
-def reverse_target_norm(predicted_targets, scalers_path='target_norm.joblib'):
+def reverse_target_norm(predicted_targets, scalers_path='ThermoElectrics/target_norm.joblib'):
     """
     Reverses the normalization for a list of predicted target values, converting them back to their original scale.
         """

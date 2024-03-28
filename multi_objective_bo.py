@@ -21,7 +21,7 @@ import numpy as np
 import pickle 
 from botorch.utils.multi_objective.hypervolume import Hypervolume 
 from botorch.utils.multi_objective.pareto import is_non_dominated 
-from optim_configs import test_functions, input_constraints, output_constraints, generate_structure, ScatterBO_small_benchmark
+from optim_configs import test_functions, input_constraints, output_constraints
 
 #instantiate the argument parser 
 parser = ArgumentParser() 
@@ -58,11 +58,11 @@ tkwargs = {
 print(f"Using device {tkwargs['device']}")
 
 ########
-args.test_function = 'ScattBO' #'c2dtlz2' 
-args.w_dragonfly = False  
-args.sb_dir = 'ScattBO'
+args.test_function = 'thermoelectrics' #'ScattBO' #'c2dtlz2' 
+args.w_dragonfly = True
+args.sb_dir = 'ThermoElectrics' #'ScattBO'
 ########
-date = '27-03-2024'
+date = '29-03-2024'
 N_ITER = 5 
 MC_SAMPLES = 16 
 verbose = True
@@ -301,7 +301,7 @@ for n in tqdm(range(N_TRIALS)):
             
             train_x_dragonfly = torch.cat([train_x_dragonfly, new_x_dragonfly.reshape(-1, problem.dim)])
             train_obj_dragonfly = torch.cat([train_obj_dragonfly, new_obj_dragonfly.reshape(-1, problem.num_objectives + num_constraints)])
-            train_obj_true_dragonfly = torch.cat([train_obj_true_dragonfly, new_obj_true_dragonfly.reshape(-1, 2)])
+            train_obj_true_dragonfly = torch.cat([train_obj_true_dragonfly, new_obj_true_dragonfly.reshape(-1, problem.num_objectives)])
 
 
         # update training points

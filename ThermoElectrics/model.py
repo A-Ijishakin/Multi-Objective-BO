@@ -12,7 +12,7 @@ from joblib import dump,load
 import numpy as np
 import matplotlib.pyplot as plt
 
-from features import get_datasets, featurize_and_targets
+from .features import get_datasets, featurize_and_targets
 
 def hyperparam_tune(data,model):
     # Setup RandomizedSearchCV
