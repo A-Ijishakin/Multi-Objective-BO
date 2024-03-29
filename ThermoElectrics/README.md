@@ -10,7 +10,6 @@
   <a href="https://stefanbringuier.info">
     <img alt="Website" src="https://img.shields.io/website?down_color=red&down_message=offline&up_color=green&up_message=online&url=https%3A%2F%2Fstefanbringuier.info">
   </a>
-
 </p>
 
 ## Dataset
@@ -35,7 +34,7 @@ Multi-Objective Bayesian Optimization (MOBO) can be a powerful tool in this cont
 ## Steps
 1. Run `python model.py`.
 2. Use [multi_objective_bo.py](../multi_objective_bo.py) with [testfunc.py](testfunc.py)
-3. Plot 
+3. Plot hypervolume metrics and Pareto front.
 
 ## Requirements
 
@@ -44,6 +43,7 @@ Multi-Objective Bayesian Optimization (MOBO) can be a powerful tool in this cont
 - `joblib`
 - `pandas`
 - `matplotlib`
+- `deap`
 
 
 ## Appendix
@@ -52,5 +52,6 @@ Multi-Objective Bayesian Optimization (MOBO) can be a powerful tool in this cont
 ![](fit_metrics.png)
 
 ### Pareto Front using Evolutionary MOO
+See [run_moo.py](run_moo.py) for details of implementation. This is only for comparison to MOBO Dragonfly solutions.
 
-![](pareto_evoalg_moo)
+![](pareto_evoalg_moo.png)
