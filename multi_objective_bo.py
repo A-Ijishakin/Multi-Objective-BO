@@ -59,11 +59,11 @@ print(f"Using device {tkwargs['device']}")
 
 ########
 args.test_function = 'thermoelectrics' #'ScattBO' #'c2dtlz2' 
-args.w_dragonfly = True
+args.w_dragonfly = False
 args.sb_dir = 'ThermoElectrics' #'ScattBO'
 ########
 date = '29-03-2024'
-N_ITER = 5 
+N_ITER = 20
 MC_SAMPLES = 16 
 verbose = True
 #if there is noise specified than instantiate it's standard error else leave it as None 
@@ -427,6 +427,12 @@ if args.w_dragonfly:
 random = {'eval': eval_all_random, 'train_obj_true': train_obj_true_all_random, 'train_obj': train_obj_all_random,
           'train_x': train_x_all_random, 'method': 'random'} 
 
-for (name, method) in zip(['qparego', 'qehvi', 'qnehvi', 'dragonfly', 'random'], [qparego, qehvi, qnehvi, dragonfly, random]):
-    with open(f"MOO/runs/{date}/{name}.pkl", "wb") as f:
-        pickle.dump(method, f) 
+if args.w_dragonfly:
+    for (name, method) in zip(['qparego', 'qehvi', 'qnehvi', 'dragonfly', 'random'], [qparego, qehvi, qnehvi, dragonfly, random]):
+        with open(f"MOO/runs/{date}/{name}.pkl", "wb") as f:
+            pickle.dump(method, f) 
+else:
+    for (name, method) in zip(['qparego', 'qehvi', 'qnehvi',  'random'], [qparego, qehvi, qnehvi, random]):
+        with open(f"MOO/runs/{date}/{name}.pkl", "wb") as f:
+            pickle.dump(method, f) 
+

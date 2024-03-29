@@ -11,10 +11,8 @@ def call_model(features,model_file="ThermoElectrics/gbr_model.joblib"):
     return seebeck, sigma, kappa
 
 def test_thermoelectric_BaCrSe(ba_comp,cr_comp,temperature):
-    se_comp = 1.0 - ba_comp - cr_comp
+    se_comp = max(1.0e-6, 1.0 - ba_comp - cr_comp)
     formula = f"Ba{ba_comp}Cr{cr_comp}Se{se_comp}"
-    #print(se_comp+ba_comp+cr_comp)
-    #assert sum([ba_comp,cr_comp,se_comp]) == 1.0
     features = featurize(formula,temperature=temperature)
     return call_model(features)
 
@@ -39,10 +37,22 @@ def test_thermoelectric_FeNbMgSn(fe_comp,
 class ThermoelectricBenchmark:
     def __init__(self):
         self.dim = 3
-        self.bounds = torch.tensor([[0.0e0,0.0e0,300.0],
-                                    [0.499999e0,0.49999e0,1200.0]])
+        self.bounds = torch.tensor([[1.0e-6,1.0e-6,300.0],
+                                    [0.499995e0,0.49995e0,400.0]])
         self.num_objectives = 3 
-        self.ref_point = torch.tensor([-1.0e2,-1.0e2, 1.0e3])
+        self.ref_point = torch.tensor([100.0,10000.0, 1.0])
+        self.ideal_scenario = torch.tensor([1.0e3, 10**6, 1.0e-1])
+        self.max_hv = self.estimate_initial_max_hv()
+
+    def estimate_initial_max_hv(self):
+        hv_volume = 1
+        for ideal, ref in zip(self.ideal_scenario, self.ref_point):
+            diff = abs(ideal - ref) if ideal > ref else 0
+            hv_volume *= diff
+        return hv_volume
+
+    def update_max_hv(self, new_max_hv):
+        self.max_hv = new_max_hv
 
     def evaluate(self, X):
         # Convert tensor X to numpy array if necessary
