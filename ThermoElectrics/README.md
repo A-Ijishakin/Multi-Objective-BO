@@ -51,3 +51,6 @@ Multi-Objective Bayesian Optimization (MOBO) can be a powerful tool in this cont
 
 ![](fit_metrics.png)
 
+### Pareto Front using Evolutionary MOO
+
+![](pareto_evoalg_moo)

@@ -10,8 +10,8 @@ def call_model(features,model_file="ThermoElectrics/gbr_model.joblib"):
     seebeck, sigma, kappa = reverse_target_norm(model.predict(features_arry)[0])
     return seebeck, sigma, kappa
 
-def test_thermoelectric_BaCrSe(ba_comp,cr_comp,temperature):
-    se_comp = max(1.0e-6, 1.0 - ba_comp - cr_comp)
+def test_thermoelectric_BaCrSe(ba_comp,cr_comp,se_comp,temperature):
+    #se_comp = max(1.0e-6, 1.0 - ba_comp - cr_comp)
     formula = f"Ba{ba_comp}Cr{cr_comp}Se{se_comp}"
     features = featurize(formula,temperature=temperature)
     return call_model(features)
@@ -36,11 +36,11 @@ def test_thermoelectric_FeNbMgSn(fe_comp,
 
 class ThermoelectricBenchmark:
     def __init__(self):
-        self.dim = 3
-        self.bounds = torch.tensor([[1.0e-6,1.0e-6,300.0],
-                                    [0.499995e0,0.49995e0,400.0]])
+        self.dim = 4
+        self.bounds = torch.tensor([[0.5,0.5,0.5,300.0],
+                                    [10.0,10.0,10.0,400.0]])
         self.num_objectives = 3 
-        self.ref_point = torch.tensor([100.0,10000.0, 1.0])
+        self.ref_point = torch.tensor([228.0,372.0, 1.09])
         self.ideal_scenario = torch.tensor([1.0e3, 10**6, 1.0e-1])
         self.max_hv = self.estimate_initial_max_hv()
 
@@ -61,8 +61,8 @@ class ThermoelectricBenchmark:
         outputs = []
 
         for i in range(len(X_np)):
-            ba_comp, cr_comp, temperature = X_np[i]
-            output = test_thermoelectric_BaCrSe(ba_comp, cr_comp, temperature)
+            ba_comp, cr_comp, se_comp, temperature = X_np[i]
+            output = test_thermoelectric_BaCrSe(ba_comp, cr_comp, se_comp, temperature)
             #  Seebeck & sigma for maximization
             seebeck2 = output[0]**2
             sigma = output[1]
