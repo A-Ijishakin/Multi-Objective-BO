@@ -63,7 +63,11 @@ def generate_initial_data(problem, NOISE_SE=None, n=6,
         train_obj_true = problem(train_x) 
     
     if NOISE_SE != None:
-        train_obj = train_obj_true + torch.randn_like(train_obj_true) * NOISE_SE 
+        if torch.cuda.is_available():
+            train_obj = train_obj_true.to('cuda') + torch.randn_like(train_obj_true).to('cuda') * NOISE_SE .to('cuda')
+        else:
+            train_obj = train_obj_true + torch.randn_like(train_obj_true) * NOISE_SE 
+
     else:
         train_obj = train_obj_true
     
@@ -150,8 +154,11 @@ def optimize_qehvi_and_get_observation(model, train_x, sampler, problem, standar
             new_obj_true[idx] = problem(datum, root_dir='ScattBO') 
     else:
         new_obj_true = problem(new_x)     
-    
-    new_obj = new_obj_true + torch.randn_like(new_obj_true) * NOISE_SE if NOISE_SE != None else new_obj_true 
+
+    if torch.cuda.is_available():
+        new_obj = new_obj_true.to('cuda') + torch.randn_like(new_obj_true).to('cuda') * NOISE_SE if NOISE_SE != None else new_obj_true.to('cuda')
+    else:
+        new_obj = new_obj_true + torch.randn_like(new_obj_true) * NOISE_SE if NOISE_SE != None else new_obj_true 
     
     if output_constraint:
         new_con = output_constraint(problem, new_x) 
@@ -205,8 +212,10 @@ def optimize_qnehvi_and_get_observation(model, train_x,  sampler, problem, stand
     else:
         new_obj_true = problem(new_x)
     
-    
-    new_obj = new_obj_true + torch.randn_like(new_obj_true) * NOISE_SE if NOISE_SE != None else new_obj_true 
+    if torch.cuda.is_available():
+        new_obj = new_obj_true.to('cuda') + torch.randn_like(new_obj_true).to('cuda') * NOISE_SE if NOISE_SE != None else new_obj_true.to('cuda') 
+    else:
+        new_obj = new_obj_true + torch.randn_like(new_obj_true) * NOISE_SE if NOISE_SE != None else new_obj_true 
     
     if output_constraint:
         new_con = output_constraint(problem, new_x) 
@@ -273,8 +282,12 @@ def optimize_qnparego_and_get_observation(model, train_x, sampler, problem, stan
             new_obj_true[idx] = problem(datum, root_dir='ScattBO') 
     else:
         new_obj_true = problem(new_x)
-        
-    new_obj = new_obj_true + torch.randn_like(new_obj_true) * NOISE_SE if NOISE_SE != None else new_obj_true 
+
+    if torch.cuda.is_available():
+        new_obj = new_obj_true.to('cuda') + torch.randn_like(new_obj_true).to('cuda') * NOISE_SE if NOISE_SE != None else new_obj_true.to('cuda')
+    else:
+        new_obj = new_obj_true + torch.randn_like(new_obj_true) * NOISE_SE if NOISE_SE != None else new_obj_true
+
     
     if output_constraint:
         new_con = output_constraint(problem, new_x) 
